@@ -1,0 +1,60 @@
+@startuml flagship_component
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Component.puml
+
+title [Component] Флагман — конвейер скоринга операции (внутри доверенной зоны)
+
+ContainerDb_Ext(ops_store, "Хранилище операций", "DWH")
+ContainerDb_Ext(refs, "Справочники", "тарифы, лимиты, списки")
+System_Ext(kyc, "«Знай своего клиента» (ЦБ)", "вспом. сигнал риска")
+ContainerQueue_Ext(case_queue, "Очередь кейсов", "приоритизация")
+ContainerDb_Ext(audit, "Журнал решений", "append-only")
+Container_Ext(monitor, "Мониторинг и дрейф")
+Person_Ext(compliance, "Комплаенс / DPO", "владелец порогов и hard-правил")
+
+Container_Boundary(pipeline, "Конвейер скоринга операции") {
+
+    Component(ingest, "Приёмник и нормализатор", "код", "Загружает пакет операций, нормализует поля, парсит свободный текст назначения. Границы доверия: вход")
+    Component(feature_builder, "Построитель признаков", "код", "Агрегаты по клиенту/контрагенту, паттерны дробления под пороги, транзитность, отклонение от профиля ОКВЭД")
+    Component(feature_check, "Проверка полноты признаков", "детерминир. код", "FALLBACK-триггер: отсутствие/устаревание признаков, клиент без истории, значение вне обучающего диапазона")
+
+    Component(model, "Модель оценки риска", "gradient boosting", "ЕДИНСТВЕННОЕ обучаемое звено. Выдаёт сырой score + вклад факторов (SHAP). Обучается на слабых следах, не путая их")
+    Component(model_guard, "Обёртка модели", "код", "Тайм-аут, версия весов, health-check. FALLBACK: недоступность модели/сервиса признаков → детерминированный путь")
+
+    Component(calibrator, "Калибратор", "код (isotonic/Platt)", "Переводит score в вероятность. Учитывает смещение отбора: непроверенная операция != чистая")
+    Component(threshold, "Порог и зона воздержания", "детерминир. код", "Порог от комплаенс. FALLBACK: оценка около порога → человеку. Пороги увязаны с ценой обеих ошибок")
+    Component(rule_overlay, "Наложение бизнес-правил ПОД/ФТ", "детерминир. код", "Hard-правила (обязательный контроль) перекрывают модель. Сверка с сигналом порогового правила. FALLBACK: расхождение → человеку")
+    Component(prioritizer, "Приоритизатор кейсов", "код", "Риск x сумма x возраст. Формирует запись кейса: score, факторы, ссылки на источники")
+
+    Component(output_contract, "Валидатор выходного контракта", "детерминир. код", "Проверяет обязательные поля, ссылку на источник, схему ДО постановки в очередь. Нет данных → безопасный дефолт (человеку)")
+}
+
+Rel(ops_store, ingest, "Пакет операций", "batch")
+Rel(kyc, feature_builder, "Уровень риска клиента")
+Rel(refs, feature_builder, "Пороги, лимиты, списки")
+Rel(ingest, feature_builder, "Нормализованные операции")
+Rel(feature_builder, feature_check, "Вектор признаков")
+Rel(feature_check, model_guard, "Полный вектор")
+Rel(feature_check, output_contract, "Неполные признаки → в обход модели", "fallback")
+
+Rel(model_guard, model, "Запрос оценки")
+Rel(model, model_guard, "score + факторы")
+Rel(model_guard, calibrator, "Сырой score")
+Rel(model_guard, output_contract, "Модель недоступна → правила", "fallback")
+
+Rel(calibrator, threshold, "Вероятность риска")
+Rel(threshold, rule_overlay, "Решение: авто / воздержание")
+Rel(compliance, threshold, "Порог, зона воздержания")
+Rel(compliance, rule_overlay, "Hard-правила ПОД/ФТ")
+Rel(rule_overlay, prioritizer, "Итоговый вердикт + причина")
+Rel(prioritizer, output_contract, "Запись кейса")
+
+Rel(output_contract, case_queue, "Валидный кейс")
+Rel(output_contract, audit, "score, версия, факторы, решение")
+
+Rel(feature_check, monitor, "Дрейф признаков, доля неполных")
+Rel(model_guard, monitor, "Латентность, доступность")
+Rel(threshold, monitor, "Доля воздержаний около порога")
+Rel(rule_overlay, monitor, "Частота расхождений модель/правило")
+
+SHOW_LEGEND()
+@enduml
