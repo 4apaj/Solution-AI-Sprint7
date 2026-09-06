@@ -1,7 +1,7 @@
 @startuml flagship_container
 !include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Container.puml
 
-title [Container] Инициатива №1 - Выявление подозрительных операций (флагман)
+title [Container] Инициатива №1 - приоритизация операций для финмониторинга (флагман)
 
 Person(analyst, "Аналитик финмониторинга", "25 сотрудников. Разбирает кейсы из очереди, ~12 мин/операция")
 Person(compliance, "Комплаенс / DPO / ПОД-ФТ офицер", "Владелец правил внутреннего контроля, порогов и модели ответственности")

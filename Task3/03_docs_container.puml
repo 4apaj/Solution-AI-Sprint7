@@ -2,7 +2,7 @@
 
 !include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Container.puml
 
-title [Container] Инициатива №2 - Оцифровка документов кредитной заявки
+title [Container] Инициатива №2 (в связке с №18) - документный конвейер кредитной заявки
 
 Person(underwriter, "Андеррайтер", "Разбирает пакет ~1.5 ч. Получает предзаполненные поля + оригинал для сверки")
 
